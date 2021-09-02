@@ -67,7 +67,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         uint256 tokensIntoLiquidity
     );
 
-    address public constant OWNER_ADDRESS = 0x7Be379F316cd2C94B3013EAA5730D37bA9Ef5Ad1;
+    address public constant OWNER_ADDRESS = 0x0305b90023D932A30d0C5B97D5584972e2Dc96DA;
     address public constant BURNING_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     mapping (address => uint256) _rOwned;

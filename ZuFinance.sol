@@ -1,3 +1,17 @@
+                // ZuFinance is a DeFi Token issued on Binance Smart Chain (BEP-20), 
+                // designed to serve the gaming and sports betting industry, with three simple features implemented at its core; 
+                
+                       // LP Acquisition 5% 
+                       // Burning on each trade 3%
+                       // Static Reward (Reflection) 2% to all existing holders
+                       
+                       // Burn function and all fees - automatically set to 0 as soon as 1B of Tokens remaining in circulation
+                       
+                       // No team member benefits from Static Reward (Reflection)
+                       // The transaction fees applies to all team members (except the owner)
+           
+
+
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.4;
@@ -79,7 +93,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     address[] _excluded;
 
     uint256 constant MAX = ~uint256(0);
-    uint256 _tTotal = 150 * 10**12 * 10**9;
+    uint256 _tTotal = 100 * 10**12 * 10**9;
     uint256 _rTotal = (MAX - (MAX % _tTotal));
     uint256 public currentRate = _rTotal / _tTotal;
 
@@ -100,7 +114,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         _isExcludedFromFee[owner()] = true;
         _isExcludedFromFee[address(this)] = true;
 
-        IRouter _router = IRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);  // To be changed to the one on mainnet
+        IRouter _router = IRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
 
          // Create a uniswap pair for this new token
         pair = IFactory(_router.factory()).createPair(address(this), _router.WETH());
@@ -117,7 +131,6 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         _isExcluded[0x5663D90E7e592E6e35B713d99CFd9A52351512cD] = true;
         _isExcluded[0x140ecdD83e98f87Ff67a979F30ec30e11C81278d] = true;
 
-        _isExcluded[pair] = true;
         _isExcluded[address(this)] = true;
 
         // set the rest of the contract variables
@@ -143,7 +156,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     uint256 _previousLiquidityFee = _liquidityFee;
     uint256 _totalTokenForLiquidity;
 
-    uint256 public _burnFee = 2;
+    uint256 public _burnFee = 3;
     uint256 _previousBurnFee = _burnFee;
     uint256 _totalTokenBurned;
 
@@ -666,9 +679,9 @@ contract ZuFinance is ZuFinanceBase {
         emit UpdateFee("Burn", _burnFee, burnFee);
     }
 
-    function setMaxTxPercent(uint256 maxTxPercent) external onlyOwner {
-        require(maxTxPercent <= 100, "MaxTxPercent exceeds 100");
-        uint256 newMaxTxAmount = _tTotal * maxTxPercent / 10**2;
+    function setMaxTxThousandth(uint256 maxTxThousandth) external onlyOwner {
+        require(maxTxThousandth <= 1000, "MaxTxPercent exceeds 1000");
+        uint256 newMaxTxAmount = _tTotal * maxTxThousandth / 10**3;
         maxTxAmount = newMaxTxAmount;
         emit UpdateFee("MaxTx", maxTxAmount, newMaxTxAmount);
     }

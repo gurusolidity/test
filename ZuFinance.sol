@@ -1,17 +1,3 @@
-                // ZuFinance is a DeFi Token issued on Binance Smart Chain (BEP-20), 
-                // designed to serve the gaming and sports betting industry, with three simple features implemented at its core; 
-                
-                       // LP Acquisition 5% 
-                       // Burning on each trade 3%
-                       // Static Reward (Reflection) 2% to all existing holders
-                       
-                       // Burn function and all fees - automatically set to 0 as soon as 1B of Tokens remaining in circulation
-                       
-                       // No team member benefits from Static Reward (Reflection)
-                       // The transaction fees applies to all team members (except the owner)
-           
-
-
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.4;

@@ -1,16 +1,3 @@
-          // ZuFinance is a DeFi Token issued on Binance Smart Chain (BEP-20), 
-          // Designed to serve the gaming and sports betting industry, with three simple features implemented at its core;
-
-          // LP Acquisition 5% 
-          // Burning on each trade 3%
-          // Static Reward (Reflection) 2% to all existing holders
-
-          // Burn function and all fees - automatically set to 0 as soon as 1B of Tokens remaining in circulation
-
-          // No team member benefits from Static Reward (Reflection)
-          // The transaction fees applies to all team members (except the owner)
-
-
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.4;
@@ -32,10 +19,10 @@ abstract contract Context {
     }
 
     function _msgData() internal view virtual returns (bytes calldata) {
+        this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
         return msg.data;
     }
 }
-
 
 abstract contract Ownable is Context {
     address private _owner;
@@ -69,45 +56,10 @@ abstract contract Ownable is Context {
     }
 }
 
-interface IFactory {
-    function createPair(address tokenA, address tokenB) external returns (address pair);
-}
-
-interface IRouter {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-
-    function swapExactETHForTokens(
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external payable returns (uint[] memory amounts);
-
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline) external;
-}
-
 abstract contract ZuFinanceBase is IERC20, Ownable {
     event UpdateFee(string indexed feeType, uint256 previousTaxFee, uint256 newTaxFee);
-    event IncludeReflectionAccount(address account);
-    event ExcludeReflectionAccount(address account);
     event IncludeInFee(address account);
     event ExcludeFromFee(address account);
-    event Burn(address account, uint256 amount);
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
         uint256 tokensSwapped,
@@ -115,6 +67,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         uint256 tokensIntoLiquidity
     );
 
+    address public constant OWNER_ADDRESS = 0x7Be379F316cd2C94B3013EAA5730D37bA9Ef5Ad1;
     address public constant BURNING_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     mapping (address => uint256) _rOwned;
@@ -126,12 +79,13 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     address[] _excluded;
 
     uint256 constant MAX = ~uint256(0);
-    uint256 internal _tTotal = 100 * 10**12 * 10**9;
-    uint256 internal _rTotal = (MAX - (MAX % _tTotal));
+    uint256 _tTotal = 150 * 10**12 * 10**9;
+    uint256 _rTotal = (MAX - (MAX % _tTotal));
+    uint256 public currentRate = _rTotal / _tTotal;
 
-    uint256 public maxTxAmount = 1 * 10**9 * 10**9;
-    uint256 public numTokensToSwap = 1 * 10**8 * 10**9;
-    uint256 public constant numTokensRemainingToStopFees = 1 * 10**9 * 10**9;
+    uint256 public maxTxAmount = 10**9 * 10**9;
+    uint256 public constant numTokensSellToAddToLiquidity = 10**8 * 10**9;
+    uint256 public constant numTokensRemainingToStopFees = 10**9 * 10**9;
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
@@ -146,13 +100,11 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         _isExcludedFromFee[owner()] = true;
         _isExcludedFromFee[address(this)] = true;
 
-        IRouter _router = IRouter(0x0305b90023D932A30d0C5B97D5584972e2Dc96DA);
+        IRouter _router = IRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);  // To be changed to the one on mainnet
 
          // Create a uniswap pair for this new token
-        address _pair = IFactory(_router.factory()).createPair(address(this), _router.WETH());
-        pair = _pair;
+        pair = IFactory(_router.factory()).createPair(address(this), _router.WETH());
 
-        // The team wallet addresses are fully disclosed for transparency
         _isExcluded[0x89EbF88686dC667d37738e15866eF80d3862B237] = true;
         _isExcluded[0xD3B7a3c4E88883588e2cF1C0Afce1e97A8fF1C97] = true;
         _isExcluded[0xf9C934f119A8D2c81B6438135B2e9167E024Ab95] = true;
@@ -163,9 +115,9 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         _isExcluded[0x4a2a888F04028E307A6450FeF3c5690A9600eA0b] = true;
         _isExcluded[0x99781dDE8cf5Fb8c2d32A5B33196b21c3Bb6296B] = true;
         _isExcluded[0x5663D90E7e592E6e35B713d99CFd9A52351512cD] = true;
-        
-        
-        _isExcluded[_pair] = true;
+        _isExcluded[0x140ecdD83e98f87Ff67a979F30ec30e11C81278d] = true;
+
+        _isExcluded[pair] = true;
         _isExcluded[address(this)] = true;
 
         // set the rest of the contract variables
@@ -174,7 +126,7 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         uint256 tokenToBurn = _tTotal / 10;  // 10% is to be burned
         _tokenTransferNoFee(_msgSender(), BURNING_ADDRESS, tokenToBurn);
 
-        emit Transfer(address(0), _msgSender(), _tTotal - tokenToBurn);
+        emit Transfer(address(0), _msgSender(), _tTotal);
     }
 
     modifier lockTheSwap {
@@ -185,23 +137,19 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
 
     uint256 public _taxFee = 2;
     uint256 _previousTaxFee = _taxFee;
+    uint256 _tFeeTotal;
 
     uint256 public _liquidityFee = 5;
     uint256 _previousLiquidityFee = _liquidityFee;
+    uint256 _totalTokenForLiquidity;
 
-    uint256 public _burnFee = 3;
+    uint256 public _burnFee = 2;
     uint256 _previousBurnFee = _burnFee;
-    
-    struct TotFeesPaidStruct{
-        uint256 taxFee;
-        uint256 burnFee;
-        uint256 liquidityFee;
-    }
-    TotFeesPaidStruct public totFeesPaid;
+    uint256 _totalTokenBurned;
 
     function _balanceOf(address account) internal view returns (uint256) {
         if (_isExcluded[account]) return _tOwned[account];
-        return tokenFromReflection(_rOwned[account]);
+        return _tokenFromReflection(_rOwned[account]);
     }
 
     function _reflectionFromToken(uint256 tAmount, bool deductFee) internal view returns (uint256) {
@@ -215,10 +163,9 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         }
     }
 
-    function tokenFromReflection(uint256 rAmount) public view returns(uint256) {
-        require(rAmount <= _rTotal, "Amount must be less than total reflections");
-        uint256 currentRate =  _getRate();
-        return rAmount / currentRate;
+    function _tokenFromReflection(uint256 rAmount) internal view returns(uint256) {
+        require(rAmount <= _rTotal, "Amount must be less reflected total");
+        return rAmount/currentRate;
     }
 
     function _approve(address owner, address spender, uint256 amount) internal {
@@ -231,38 +178,38 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
 
     function _reflectFee(uint256 rFee, uint256 tFee) private {
         _rTotal = _rTotal - rFee;
-        totFeesPaid.taxFee += tFee;
-
+        _tFeeTotal = _tFeeTotal + tFee;
+        _totalTokenForLiquidity += _liquidityFee * tFee / _taxFee;
+        _totalTokenBurned += _burnFee * tFee / _taxFee;
     }
 
-    function _getRate() private view returns(uint256) {
+    function _updateRate() private {
         (uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
-        return rSupply / tSupply;
+        currentRate = rSupply / tSupply;
     }
 
     function _excludeAccount(address account) internal {
         // require(account != 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D, 'We can not exclude Uniswap router.');
         require(!_isExcluded[account], "Account is already excluded");
         if (_rOwned[account] > 0) {
-            _tOwned[account] = tokenFromReflection(_rOwned[account]);
+            _tOwned[account] = _tokenFromReflection(_rOwned[account]);
         }
         _isExcluded[account] = true;
         _excluded.push(account);
-        emit ExcludeReflectionAccount(account);
     }
 
     function _includeAccount(address account) internal {
-        require(_isExcluded[account], "Account is already excluded");
+        require(_isExcluded[account], "Account is not excluded");
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
+                _rOwned[account] = _tOwned[account] * currentRate;
                 _tOwned[account] = 0;
                 _isExcluded[account] = false;
                 _excluded.pop();
                 break;
             }
         }
-        emit IncludeReflectionAccount(account);
     }
 
     function _getCurrentSupply() private view returns(uint256, uint256) {
@@ -278,11 +225,9 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     }
 
     function _takeLiquidity(uint256 tLiquidity) private {
-        totFeesPaid.liquidityFee +=tLiquidity;
-        uint256 currentRate =  _getRate();
         uint256 rLiquidity = tLiquidity * currentRate;
         _rOwned[address(this)] = _rOwned[address(this)] + rLiquidity;
-        if(_isExcluded[address(this)])
+        if (_isExcluded[address(this)])
             _tOwned[address(this)] = _tOwned[address(this)] + tLiquidity;
     }
 
@@ -308,9 +253,13 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         _burnFee = _previousBurnFee;
     }
 
-    function _getValues(uint256 tAmount) private view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
+    function _getValues(uint256 tAmount)
+        internal
+        view
+        returns (uint256, uint256, uint256, uint256, uint256, uint256)
+    {
         (uint256 tTransferAmount, uint256 tFee, uint256 tLiquidity) = _getTValues(tAmount);
-        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee) = _getRValues(tAmount, tFee, tLiquidity, _getRate());
+        (uint256 rAmount, uint256 rTransferAmount, uint256 rFee) = _getRValues(tAmount, tFee, tLiquidity);
         return (rAmount, rTransferAmount, rFee, tTransferAmount, tFee, tLiquidity);
     }
 
@@ -325,7 +274,11 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         return (tTransferAmount, tFee, tLiquidity);
     }
 
-     function _getRValues(uint256 tAmount, uint256 tFee, uint256 tLiquidity, uint256 currentRate) private pure returns (uint256, uint256, uint256) {
+    function _getRValues(uint256 tAmount, uint256 tFee, uint256 tLiquidity)
+        internal
+        view
+        returns (uint256, uint256, uint256)
+    {
         uint256 rAmount = tAmount * currentRate;
         uint256 rFee = tFee * currentRate;
         uint256 rLiquidity = tLiquidity * currentRate;
@@ -334,15 +287,11 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     }
 
     function _calculateTaxFee(uint256 _amount) private view returns (uint256) {
-        return _amount * _taxFee / 100;
+        return _amount * _taxFee / 10**2;
     }
 
     function _calculateLiquidityFee(uint256 _amount) private view returns (uint256) {
-        return _amount * _liquidityFee / 100;
-    }
-    
-    function checkCircSupply() public view returns(uint256){
-        return (_tTotal - _balanceOf(BURNING_ADDRESS));
+        return _amount * (_liquidityFee + _burnFee) / 10**2;
     }
 
     function _swapTokensForBNB(uint256 tokenAmount) private {
@@ -363,20 +312,39 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
         );
     }
 
+    function _swapTokensForBNBWithAddr(uint256 tokenAmount, address addr) private {
+        // generate the uniswap pair path of token -> weth
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = router.WETH();
+
+        _approve(address(this), address(router), tokenAmount);
+
+        // make the swap
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            tokenAmount,
+            0, // accept any amount of BNB
+            path,
+            addr,
+            block.timestamp
+        );
+    }
+
     function _addLiquidity(uint256 tokenAmount, uint256 bnbAmount) private {
         // approve token transfer to cover all possible scenarios
         _approve(address(this), address(router), tokenAmount);
 
         // add the liquidity
-        router.addLiquidityETH{value: bnbAmount} (
+        (,, uint liquidity) = router.addLiquidityETH{value: bnbAmount} (
             address(this),
             tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            BURNING_ADDRESS,  // 3 possibilities: 1) address(0); 2) address(this); 3) address(another contract)
+            address(this),  // 3 possibilities: 1) address(0); 2) address(this); 3) address(another contract)
             block.timestamp
         );
 
+        require(liquidity > 0, "Liquidity must be greater than 0");
     }
 
     function _transfer(
@@ -400,25 +368,23 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
             contractTokenBalance = maxTxAmount;
         }
 
-        bool overMinTokenBalance = contractTokenBalance >= numTokensToSwap;
+        bool overMinTokenBalance = contractTokenBalance >= numTokensSellToAddToLiquidity;
 
         if (overMinTokenBalance &&
             !inSwapAndLiquify &&
             from != pair &&
             swapAndLiquifyEnabled
         ) {
-            contractTokenBalance = numTokensToSwap;
+            contractTokenBalance = numTokensSellToAddToLiquidity;
             //add liquidity
             _swapAndLiquify(contractTokenBalance);
         }
 
         //indicates if fee should be deducted from transfer
         bool takeFee = true;
-        
-        uint256 circSupply = checkCircSupply();
 
         //if any account belongs to _isExcludedFromFee account then remove the fee
-        if (circSupply <= numTokensRemainingToStopFees ||
+        if (_tTotal <= numTokensRemainingToStopFees ||
             _isExcludedFromFee[from] ||
             _isExcludedFromFee[to])
         {
@@ -430,7 +396,18 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
     }
 
     function _swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+        uint256 totalFee  = _burnFee + _liquidityFee;
+        uint256 spentAmount = 0;
+        uint256 totalSpentAmount = 0;
 
+        if (_burnFee != 0) {
+            spentAmount = contractTokenBalance * _burnFee / totalFee ;
+            _tokenTransferNoFee(address(this), BURNING_ADDRESS, spentAmount);
+            totalSpentAmount = spentAmount;
+        }
+
+        if (_liquidityFee != 0) {
+            contractTokenBalance -= totalSpentAmount;
             // split the contract balance into halves
             uint256 half = contractTokenBalance / 2;
             uint256 otherHalf = contractTokenBalance - half;
@@ -451,19 +428,13 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
             _addLiquidity(otherHalf, newBalance);
 
             emit SwapAndLiquify(half, newBalance, otherHalf);
+        }
     }
 
     //this method is responsible for taking all fee, if takeFee is true
     function _tokenTransfer(address sender, address recipient, uint256 amount, bool takeFee) private {
         if (!takeFee)
             _removeAllFee();
-
-        else if(_burnFee > 0) {
-            uint256 burnAmt = amount * _burnFee / 100;
-            _tokenTransferNoFee(sender, BURNING_ADDRESS, burnAmt);
-            totFeesPaid.burnFee += burnAmt;
-            amount = amount - burnAmt;
-        }
 
         if (_isExcluded[sender] && !_isExcluded[recipient]) {
             _transferFromExcluded(sender, recipient, amount);
@@ -475,13 +446,17 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
             _transferStandard(sender, recipient, amount);
         }
 
+        // currentRate is only updated here for every transaction that has a tax fee.
+        // Only when a tax fee is collected does the rate need to get updated.
+        _updateRate();
+
         if (!takeFee)
             _restoreAllFee();
     }
 
     function _tokenTransferNoFee(address sender, address recipient, uint256 amount) private {
-        _rOwned[sender] = _rOwned[sender] - amount * _getRate();
-        _rOwned[recipient] = _rOwned[recipient] + amount * _getRate();
+        _rOwned[sender] = _rOwned[sender] - amount * currentRate;
+        _rOwned[recipient] = _rOwned[recipient] + amount * currentRate;
 
         if (_isExcluded[sender]) {
             _tOwned[sender] = _tOwned[sender] - amount;
@@ -536,21 +511,53 @@ abstract contract ZuFinanceBase is IERC20, Ownable {
 
     function _buyback() internal {
         uint256 balance = address(this).balance;
-        require(balance > 0, "Insufficient BNB balance");
 
         address[] memory path = new address[](2);
         path[0] = router.WETH();
         path[1] = address(this);
 
-        router.swapExactETHForTokens{value: balance} (
+        uint256[] memory amounts = router.swapExactETHForTokens{value: balance} (
             0,
             path,
-            BURNING_ADDRESS,
+            address(this),
             block.timestamp
         );
+
+        require(amounts[0] > 0, "No tokens are bought back");
     }
 }
 
+interface IFactory {
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+}
+
+interface IRouter {
+    function factory() external pure returns (address);
+    function WETH() external pure returns (address);
+
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+
+    function swapExactETHForTokens(
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external payable returns (uint[] memory amounts);
+
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline) external;
+}
 
 contract ZuFinance is ZuFinanceBase {
 
@@ -611,6 +618,10 @@ contract ZuFinance is ZuFinanceBase {
         return _reflectionFromToken(tAmount, deductFee);
     }
 
+    function tokenFromReflection(uint256 rAmount) external view returns(uint256) {
+        return _tokenFromReflection(rAmount);
+    }
+
     function excludeAccountForReflection(address account) external onlyOwner {
         _excludeAccount(account);
     }
@@ -638,32 +649,28 @@ contract ZuFinance is ZuFinanceBase {
     }
 
     function setTaxFeePercent(uint256 taxFee) external onlyOwner {
-        require(taxFee <= 20, "TaxFee exceeds 20");
+        require(taxFee <= 100, "TaxFee exceeds 100");
         _taxFee = taxFee;
         emit UpdateFee("Tax", _taxFee, taxFee);
     }
 
     function setLiquidityFeePercent(uint256 liquidityFee) external onlyOwner {
-        require(liquidityFee <= 10, "LiquidityFee exceeds 10");
+        require(liquidityFee <= 100, "LiquidityFee exceeds 100");
         _liquidityFee = liquidityFee;
         emit UpdateFee("Liquidity", _liquidityFee, liquidityFee);
     }
 
     function setBurnFeePercent(uint256 burnFee) external onlyOwner {
-        require(burnFee <= 10, "BurnFee exceeds 10");
+        require(burnFee <= 100, "BurnFee exceeds 100");
         _burnFee = burnFee;
         emit UpdateFee("Burn", _burnFee, burnFee);
     }
 
     function setMaxTxPercent(uint256 maxTxPercent) external onlyOwner {
-        require(maxTxPercent <= 10, "MaxTxPercent exceeds 10");
+        require(maxTxPercent <= 100, "MaxTxPercent exceeds 100");
         uint256 newMaxTxAmount = _tTotal * maxTxPercent / 10**2;
         maxTxAmount = newMaxTxAmount;
         emit UpdateFee("MaxTx", maxTxAmount, newMaxTxAmount);
-    }
-
-    function setNumTokensToSwap(uint256 amount) external onlyOwner{
-        numTokensToSwap = amount * 10**9;
     }
 
     function setSwapAndLiquifyEnabled(bool enabled) external onlyOwner {
@@ -671,4 +678,15 @@ contract ZuFinance is ZuFinanceBase {
         emit SwapAndLiquifyEnabledUpdated(swapAndLiquifyEnabled);
     }
 
+    function getTotalReflectionFee() external view returns (uint256) {
+        return _tFeeTotal;
+    }
+
+    function getTotalTokenForLiquidity() external view returns (uint256) {
+        return _totalTokenForLiquidity;
+    }
+
+    function getTotalTokenBurned() external view returns (uint256) {
+        return _totalTokenBurned;
+    }
 }
